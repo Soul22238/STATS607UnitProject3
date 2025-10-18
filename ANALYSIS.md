@@ -4,6 +4,8 @@
 
 I tried to reproduce Benjamini & Hochberg (1995) Figure 1, but got some different results.
 
+**GitHub Repository:** https://github.com/Soul22238/STATS607UnitProject2
+
 **Main differences:**
 
 1. **Lower power at small m**: The paper showed power close to 1.0 even for m=4 with mode D. I got much lower power (around 0.1-0.5) with weak signals. Maybe I misunderstood their signal specification, or they implemented the "linearly decreasing" strategy differently than I did.

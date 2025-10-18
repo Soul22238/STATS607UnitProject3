@@ -1,14 +1,43 @@
 # STATS607 Unit Project 2: Multiple Testing Simulation
 
-Simulation study comparing Bonferroni, Hochberg, and FDR control methods.
+Simulation study comparing three multiple testing correction methods (Bonferroni, Hochberg, and Benjamini-Hochberg FDR control) across varying signal strengths, hypothesis counts, and allocation strategies.
+
+
+## Key Findings
+
+FDR control achieves 20-30% higher power than Bonferroni at large m, especially with strong signals. Signal allocation mode (D/E/I) has a larger impact on power than the proportion of null hypotheses.
+
+## Setup
+
+**Install dependencies:**
+```bash
+pip install -r requirements.txt
+```
+
+Requirements: Python 3.11+, numpy, scipy, pandas, matplotlib, pytest
 
 ## Quick Start
 
+**Run complete analysis:**
 ```bash
-make all      # Run full pipeline: generate data → analyze → create figures
+make all      # Generate data → analyze → create figures
+```
+
+**Or run steps individually:**
+```bash
+make simulate # Generate raw simulation data
+make analyze  # Compute power metrics
+make figures  # Create visualizations
 make test     # Run test suite
 make clean    # Remove all generated files
 ```
+
+## Runtime
+
+- `make simulate`: ~1-2 minutes (240 data files, 20,000 simulations each)
+- `make analyze`: ~5-7 minutes (applies 3 correction methods)
+- `make figures`: ~10-20 seconds (creates 4 PNG files)
+- **Total:** ~10-15 minutes
 
 ## Project Structure
 
