@@ -4,6 +4,7 @@ from pathlib import Path
 from methods import z_test, Bonferroni_correction, Hochberg_correction, FDR_control
 from metrics import get_avg_power
 from dgps import *
+from pyinstrument import Profiler
 
 def generate_data(n_sim=20000, output_dir='data'):
     """Generate raw simulation data (X and true mus) and save to disk."""
@@ -116,6 +117,16 @@ def run_all_simulations(n_sim=20000, data_dir='data', output_dir='results/raw'):
 if __name__ == "__main__":
     import sys
     
+    # Check if profiling is requested
+    enable_profiling = '--profile' in sys.argv
+    if '--profile' in sys.argv:
+        sys.argv.remove('--profile')
+    
+    if enable_profiling:
+        profiler = Profiler()
+        profiler.start()
+        print("🔍 Profiling enabled...")
+    
     if len(sys.argv) > 1 and sys.argv[1] == 'generate':
         # Generate raw data
         generate_data(n_sim=20000)
@@ -126,3 +137,18 @@ if __name__ == "__main__":
         # Run full pipeline
         generate_data(n_sim=20000)
         run_all_simulations(n_sim=20000)
+    
+    if enable_profiling:
+        profiler.stop()
+        print("\n" + "="*70)
+        print("🔍 PROFILING RESULTS")
+        print("="*70)
+        profiler.print()
+        
+        # Save HTML report
+        output_dir = Path('results/profiles')
+        output_dir.mkdir(parents=True, exist_ok=True)
+        html_file = output_dir / 'full_simulation_profile.html'
+        with open(html_file, 'w') as f:
+            f.write(profiler.output_html())
+        print(f"\n📊 HTML profile saved to: {html_file}")
