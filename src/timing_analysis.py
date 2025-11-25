@@ -1,278 +1,177 @@
 """
-Estimate single simulation run time as a function of key parameters
+Timing Analysis: Single Simulation Runtime vs Key Parameters
+Measures runtime as function of m (hypotheses) and n_sim (simulations)
 """
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from pyinstrument import Profiler
 import time
 from pathlib import Path
 from dgps import DGP
 from methods import z_test, Bonferroni_correction, Hochberg_correction, FDR_control
 from metrics import get_avg_power
 
-def time_single_simulation(m, L, mode, n_sim=1000):
-    """
-    Time a single simulation configuration
+
+def time_single_run(m, n_sim, L=10, mode='E', null_ratio=0.5):
+    """Time one complete simulation run."""
+    start = time.perf_counter()
     
-    Parameters
-    ----------
-    m : int
-        Total number of hypotheses
-    L : float
-        Signal strength
-    mode : str
-        Mode ('D', 'E', 'I')
-    n_sim : int
-        Number of simulations to run for this configuration
-    
-    Returns
-    -------
-    dict with timing results
-    """
-    # Setup
-    m0 = int(m * 0.5)  # 50% null hypotheses
+    # Setup DGP
+    m0 = int(m * null_ratio)
     rng = np.random.default_rng(seed=607)
     dgp = DGP(m=m, m0=m0, L=L, mode=mode)
-    
-    # Time data generation
-    start_time = time.time()
     mus = dgp.generate_mus()
-    mus_time = time.time() - start_time
     
-    # Time single data generation
-    start_time = time.time()
-    X = dgp.generate_data(rng=rng)
-    single_data_gen_time = time.time() - start_time
+    # Run simulations with all correction methods
+    corrections = {
+        'bonferroni': Bonferroni_correction,
+        'hochberg': Hochberg_correction,
+        'fdr': FDR_control
+    }
     
-    # Time statistical testing
-    start_time = time.time()
-    p_values = z_test(X)
-    z_test_time = time.time() - start_time
+    results = {name: [] for name in corrections}
     
-    # Time corrections
-    start_time = time.time()
-    bonf_result = Bonferroni_correction(p_values)
-    bonf_time = time.time() - start_time
-    
-    start_time = time.time()
-    hoch_result = Hochberg_correction(p_values)
-    hoch_time = time.time() - start_time
-    
-    start_time = time.time()
-    fdr_result = FDR_control(p_values)
-    fdr_time = time.time() - start_time
-    
-    # Time full simulation loop
-    start_time = time.time()
-    results = []
     for _ in range(n_sim):
         X = dgp.generate_data(rng=rng)
         p_values = z_test(X)
-        bonf_result = Bonferroni_correction(p_values)
-        results.append(bonf_result)
+        for name, func in corrections.items():
+            results[name].append(func(p_values))
     
-    full_loop_time = time.time() - start_time
-    avg_single_sim_time = full_loop_time / n_sim
+    # Calculate metrics
+    for name in corrections:
+        power = get_avg_power(mus, np.array(results[name]))
     
-    return {
-        'm': m,
-        'L': L,
-        'mode': mode,
-        'm0': m0,
-        'm1': m - m0,
-        'n_sim': n_sim,
-        'mus_generation_time': mus_time,
-        'single_data_gen_time': single_data_gen_time,
-        'z_test_time': z_test_time,
-        'bonferroni_time': bonf_time,
-        'hochberg_time': hoch_time,
-        'fdr_time': fdr_time,
-        'full_loop_time': full_loop_time,
-        'avg_single_sim_time': avg_single_sim_time,
-        'estimated_20k_time': avg_single_sim_time * 20000
-    }
+    return time.perf_counter() - start
 
-def analyze_parameter_scaling():
-    """
-    Analyze how simulation time scales with key parameters
-    """
-    print("🔍 Analyzing simulation time scaling with parameters...")
-    print("=" * 70)
-    
-    # Key parameters to test
-    m_values = [4, 8, 16, 32, 64]
-    L_values = [5, 8, 10, 15]
-    modes = ['D', 'E', 'I']
+
+def measure_and_save():
+    """Measure timing for different parameter values and save to CSV."""
+    print("="*60)
+    print("TIMING ANALYSIS: Single Simulation Runs")
+    print("="*60)
     
     results = []
-    total_tests = len(m_values) * len(L_values) * len(modes)
-    test_num = 0
     
-    for m in m_values:
-        for L in L_values:
-            for mode in modes:
-                test_num += 1
-                print(f"\rTesting {test_num}/{total_tests}: m={m}, L={L}, mode={mode}", end='', flush=True)
-                
-                # Run timing test
-                result = time_single_simulation(m, L, mode, n_sim=500)  # 500 simulations for good average
-                results.append(result)
+    # Test m scaling (n_sim fixed at 1000)
+    print("\n Testing m scaling (n_sim=1000)...")
+    for m in [4, 8, 16, 32, 64]:
+        t = time_single_run(m=m, n_sim=1000)
+        results.append({'param': 'm', 'value': m, 'time': t})
+        print(f"  m={m:3d}: {t:.3f}s")
     
-    print("\n" + "=" * 70)
+    # Test n_sim scaling (m fixed at 32)
+    print("\n Testing n_sim scaling (m=32)...")
+    for n_sim in [500, 1000, 2000, 5000, 10000, 20000]:
+        t = time_single_run(m=32, n_sim=n_sim)
+        results.append({'param': 'n_sim', 'value': n_sim, 'time': t})
+        print(f"  n_sim={n_sim:5d}: {t:.3f}s")
     
-    # Convert to DataFrame for analysis
+    # Save data
     df = pd.DataFrame(results)
-    
-    # Display results
-    print("\n📊 Single Simulation Timing Results")
-    print("-" * 70)
-    print(f"{'m':<4} {'L':<4} {'Mode':<4} {'Avg Single (ms)':<15} {'Est. 20k (min)':<15}")
-    print("-" * 70)
-    
-    for _, row in df.iterrows():
-        avg_ms = row['avg_single_sim_time'] * 1000
-        est_20k_min = row['estimated_20k_time'] / 60
-        print(f"{row['m']:<4} {row['L']:<4} {row['mode']:<4} {avg_ms:<15.3f} {est_20k_min:<15.1f}")
-    
-    # Save detailed results
-    output_dir = Path('results/timing')
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    csv_file = output_dir / 'single_simulation_timing.csv'
-    df.to_csv(csv_file, index=False)
-    print(f"\n💾 Detailed results saved to: {csv_file}")
+    Path('results/timing').mkdir(parents=True, exist_ok=True)
+    df.to_csv('results/timing/single_simulation_timing.csv', index=False)
+    print(f"\n Data saved to: results/timing/single_simulation_timing.csv")
     
     return df
 
-def plot_scaling_analysis(df):
-    """
-    Create plots showing how simulation time scales with parameters
-    """
-    output_dir = Path('results/timing')
-    output_dir.mkdir(parents=True, exist_ok=True)
+
+def plot_results(df):
+    """Create timing plots with linear and log-log scales."""
+    from scipy import stats
     
-    # Plot 1: Time vs m (number of hypotheses)
-    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-    fig.suptitle('Single Simulation Time Scaling Analysis', fontsize=14)
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(14, 10))
     
-    # Plot 1a: Average single simulation time vs m
-    ax = axes[0, 0]
-    for L in df['L'].unique():
-        subset = df[df['L'] == L].groupby('m')['avg_single_sim_time'].mean()
-        ax.plot(subset.index, subset.values * 1000, marker='o', label=f'L={L}')
+    # Get data
+    m_data = df[df['param'] == 'm']
+    nsim_data = df[df['param'] == 'n_sim']
+    m_vals = m_data['value'].values
+    m_times = m_data['time'].values
+    nsim_vals = nsim_data['value'].values
+    nsim_times = nsim_data['time'].values
     
-    ax.set_xlabel('m (number of hypotheses)')
-    ax.set_ylabel('Average time (ms)')
-    ax.set_title('Single Simulation Time vs m')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
+    # Top row: Linear scale plots
+    ax1.plot(m_vals, m_times, 'bo-', linewidth=2, markersize=8)
+    ax1.set_xlabel('Number of Hypotheses (m)', fontsize=11)
+    ax1.set_ylabel('Runtime (seconds)', fontsize=11)
+    ax1.set_title('Runtime vs m (Linear Scale)', fontsize=12, fontweight='bold')
+    ax1.grid(True, alpha=0.3)
     
-    # Plot 1b: Estimated 20k simulation time vs m
-    ax = axes[0, 1]
-    for L in df['L'].unique():
-        subset = df[df['L'] == L].groupby('m')['estimated_20k_time'].mean()
-        ax.plot(subset.index, subset.values / 60, marker='o', label=f'L={L}')
+    ax2.plot(nsim_vals, nsim_times, 'ro-', linewidth=2, markersize=8)
+    ax2.set_xlabel('Number of Simulations (n_sim)', fontsize=11)
+    ax2.set_ylabel('Runtime (seconds)', fontsize=11)
+    ax2.set_title('Runtime vs n_sim (Linear Scale)', fontsize=12, fontweight='bold')
+    ax2.grid(True, alpha=0.3)
     
-    ax.set_xlabel('m (number of hypotheses)')
-    ax.set_ylabel('Estimated time for 20k sims (minutes)')
-    ax.set_title('Est. 20k Simulation Time vs m')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
+    # Bottom row: Log-log plots with complexity analysis
+    # m log-log plot
+    log_m = np.log2(m_vals)
+    log_time_m = np.log2(m_times)
+    slope_m, intercept_m, r_m, _, _ = stats.linregress(log_m, log_time_m)
     
-    # Plot 2a: Time breakdown by component
-    ax = axes[1, 0]
-    components = ['single_data_gen_time', 'z_test_time', 'bonferroni_time', 'hochberg_time', 'fdr_time']
-    component_labels = ['Data Gen', 'Z-test', 'Bonferroni', 'Hochberg', 'FDR']
+    ax3.loglog(m_vals, m_times, 'bo-', linewidth=2, markersize=8, label='Observed')
+    # Add fitted line
+    m_fitted = 2**(slope_m * log_m + intercept_m)
+    ax3.loglog(m_vals, m_fitted, 'b--', linewidth=2, alpha=0.7, 
+               label=f'Fit: O(m^{slope_m:.2f}), R²={r_m**2:.3f}')
+    ax3.set_xlabel('Number of Hypotheses (m)', fontsize=11)
+    ax3.set_ylabel('Runtime (seconds)', fontsize=11)
+    ax3.set_title('Log-Log: m Complexity', fontsize=12, fontweight='bold')
+    ax3.grid(True, alpha=0.3, which='both')
+    ax3.legend(fontsize=9)
     
-    # Average across all configurations
-    avg_times = [df[comp].mean() * 1000 for comp in components]  # Convert to ms
+    # n_sim log-log plot
+    log_nsim = np.log2(nsim_vals)
+    log_time_nsim = np.log2(nsim_times)
+    slope_nsim, intercept_nsim, r_nsim, _, _ = stats.linregress(log_nsim, log_time_nsim)
     
-    bars = ax.bar(component_labels, avg_times)
-    ax.set_ylabel('Average time (ms)')
-    ax.set_title('Time Breakdown by Component')
-    ax.tick_params(axis='x', rotation=45)
-    
-    # Add value labels on bars
-    for bar, time in zip(bars, avg_times):
-        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01, 
-                f'{time:.3f}', ha='center', va='bottom')
-    
-    # Plot 2b: Time scaling by mode
-    ax = axes[1, 1]
-    for mode in df['mode'].unique():
-        subset = df[df['mode'] == mode].groupby('m')['avg_single_sim_time'].mean()
-        ax.plot(subset.index, subset.values * 1000, marker='o', label=f'Mode {mode}')
-    
-    ax.set_xlabel('m (number of hypotheses)')
-    ax.set_ylabel('Average time (ms)')
-    ax.set_title('Single Simulation Time by Mode')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
+    ax4.loglog(nsim_vals, nsim_times, 'ro-', linewidth=2, markersize=8, label='Observed')
+    # Add fitted line
+    nsim_fitted = 2**(slope_nsim * log_nsim + intercept_nsim)
+    ax4.loglog(nsim_vals, nsim_fitted, 'r--', linewidth=2, alpha=0.7,
+               label=f'Fit: O(n^{slope_nsim:.2f}), R²={r_nsim**2:.3f}')
+    ax4.set_xlabel('Number of Simulations (n_sim)', fontsize=11)
+    ax4.set_ylabel('Runtime (seconds)', fontsize=11)
+    ax4.set_title('Log-Log: n_sim Complexity', fontsize=12, fontweight='bold')
+    ax4.grid(True, alpha=0.3, which='both')
+    ax4.legend(fontsize=9)
     
     plt.tight_layout()
-    
-    plot_file = output_dir / 'simulation_timing_analysis.png'
-    plt.savefig(plot_file, dpi=300, bbox_inches='tight')
-    print(f"📈 Plots saved to: {plot_file}")
-    plt.show()
+    plt.savefig('results/timing/simulation_timing_analysis.png', dpi=300, bbox_inches='tight')
+    print(f"📈 Plot saved to: results/timing/simulation_timing_analysis.png")
+    print(f"   Complexity: m ~ O(m^{slope_m:.2f}), n_sim ~ O(n^{slope_nsim:.2f})")
+    plt.close()
 
-def estimate_total_runtime():
-    """
-    Estimate total runtime for the full simulation study
-    """
-    print("\n🕐 Total Runtime Estimation")
-    print("=" * 50)
+
+def estimate_full_study(df):
+    """Estimate total runtime for full study."""
+    print("\n" + "="*60)
+    print("FULL STUDY ESTIMATE")
+    print("="*60)
     
-    # Parameters for full study
-    m_values = [4, 8, 16, 32, 64]
-    L_values = [5, 8, 10, 15]
-    modes = ['D', 'E', 'I']
-    null_ratios = [0.75, 0.5, 0.25, 0.0]
-    n_sim = 20000
+    # Get time for n_sim=20000
+    nsim_data = df[df['param'] == 'n_sim']
+    time_20k = nsim_data[nsim_data['value'] == 20000]['time'].values[0]
     
-    # Quick timing test with largest m
-    print("Running quick timing test with m=64...")
-    result = time_single_simulation(m=64, L=10, mode='E', n_sim=100)
-    avg_single_time = result['avg_single_sim_time']
+    n_configs = 5 * 4 * 3 * 4  # 240 configurations
+    total_time = n_configs * time_20k
     
-    # Calculate total configurations
-    total_configs = len(m_values) * len(L_values) * len(modes) * len(null_ratios)
-    
-    # Estimate times
-    total_simulations = total_configs * n_sim
-    estimated_total_time = total_simulations * avg_single_time
-    
-    print(f"Configurations: {total_configs}")
-    print(f"Total simulations: {total_simulations:,}")
-    print(f"Average single simulation time: {avg_single_time*1000:.3f} ms")
-    print(f"Estimated total time: {estimated_total_time/3600:.1f} hours")
-    print(f"Estimated total time: {estimated_total_time/60:.1f} minutes")
-    
-    # Time for data generation vs analysis
-    data_gen_time = total_configs * n_sim * result['single_data_gen_time']
-    print(f"\nData generation time: {data_gen_time/60:.1f} minutes")
-    print(f"Analysis time: {(estimated_total_time - data_gen_time)/60:.1f} minutes")
+    print(f"Configuration: 240 configs (5m × 4L × 3modes × 4ratios)")
+    print(f"Per config (n_sim=20000): {time_20k:.2f}s")
+    print(f"Total time: {total_time:.1f}s = {total_time/60:.1f} minutes")
+    print(f"Total simulations: {n_configs * 20000:,}")
+
 
 if __name__ == "__main__":
-    import sys
+    # Measure timing and save data
+    df = measure_and_save()
     
-    if len(sys.argv) > 1 and sys.argv[1] == 'quick':
-        # Quick test with just a few parameters
-        print("🚀 Quick timing test...")
-        result = time_single_simulation(m=32, L=8, mode='E', n_sim=1000)
-        
-        print("\n📊 Quick Results:")
-        print(f"m={result['m']}, L={result['L']}, mode={result['mode']}")
-        print(f"Single simulation time: {result['avg_single_sim_time']*1000:.3f} ms")
-        print(f"Estimated 20k simulation time: {result['estimated_20k_time']/60:.1f} minutes")
-        
-    else:
-        # Full analysis
-        df = analyze_parameter_scaling()
-        plot_scaling_analysis(df)
-        estimate_total_runtime()
-        
-        print("\n✅ Timing analysis complete!")
-        print("Check results/timing/ for detailed results and plots.")
+    # Create plots
+    plot_results(df)
+    
+    # Estimate full study
+    estimate_full_study(df)
+    
+    print("\n" + "="*60)
+    print("ANALYSIS COMPLETE")
+    print("="*60)

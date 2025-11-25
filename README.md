@@ -25,18 +25,22 @@ make all      # Generate data → analyze → create figures
 
 **Or run steps individually:**
 ```bash
-make simulate # Generate raw simulation data
-make analyze  # Compute power metrics
-make figures  # Create visualizations
-make test     # Run test suite
-make clean    # Remove all generated files
+make simulate     # Generate raw simulation data
+make analyze      # Compute power metrics
+make figures      # Create visualizations
+make profile      # Generate data with full performance profiling
+make profile-part # Run quick performance tests
+make test         # Run test suite
+make clean        # Remove all generated files
 ```
 
 ## Runtime
 
-- `make simulate`: ~1-2 minutes (240 data files, 20,000 simulations each)
+- `make simulate`: ~1.25 minutes (240 data files, 20,000 simulations each)
 - `make analyze`: ~5-7 minutes (applies 3 correction methods)
 - `make figures`: ~10-20 seconds (creates 4 PNG files)
+- `make profile`: ~1.25 minutes (data generation with performance analysis)
+- `make profile-part`: ~5 seconds (quick performance tests)
 - **Total:** ~10-15 minutes
 
 ## Project Structure
