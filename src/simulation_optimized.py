@@ -181,6 +181,14 @@ def run_simulations_optimized(n_sim=20000, data_dir='data_optimized', output_dir
 
 if __name__ == "__main__":
     import sys
+    from pyinstrument import Profiler
+    
+    enable_profiling = '--profile' in sys.argv
+    
+    if enable_profiling:
+        profiler = Profiler(interval=0.1)  # Sample every 100ms to drastically reduce file size for nested loops
+        profiler.start()
+        print("Profiling enabled")
     
     if len(sys.argv) > 1 and sys.argv[1] == 'generate':
         generate_data_optimized(n_sim=20000)
@@ -190,3 +198,19 @@ if __name__ == "__main__":
         # Run full pipeline
         generate_data_optimized(n_sim=20000)
         run_simulations_optimized(n_sim=20000)
+    
+    if enable_profiling:
+        profiler.stop()
+        print("\n" + "="*70)
+        print("PROFILING RESULTS")
+        print("="*70)
+        profiler.print()
+        
+        # Save HTML report
+        from pathlib import Path
+        output_dir = Path('results/profiles')
+        output_dir.mkdir(parents=True, exist_ok=True)
+        html_file = output_dir / 'full_simulation_optimized_profile.html'
+        with open(html_file, 'w') as f:
+            f.write(profiler.output_html())
+        print(f"\nHTML profile saved to: {html_file}")

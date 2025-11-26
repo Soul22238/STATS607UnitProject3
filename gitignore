@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv
+*.egg-info/
+dist/
+build/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Data directories (temporary/intermediate files)
+data_optimized/
+data_profile/
+data_profile_opt/
+data_test_opt/
+
+# Results
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

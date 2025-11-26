@@ -1,7 +1,7 @@
 # Makefile for STATS607 Unit Project 2
 # Simulation study on multiple testing procedures
 
-.PHONY: all simulate analyze figures clean test profile profile-full complexity help optimize benchmark
+.PHONY: all simulate analyze figures clean test profile profile-part profile-opt complexity help optimize benchmark
 
 # Default target: run complete pipeline
 all: simulate analyze figures
@@ -18,6 +18,7 @@ help:
 	@echo "  make benchmark     - Run timing comparison: baseline vs optimized"
 	@echo "  make profile       - Run full simulation with profiling"
 	@echo "  make profile-part  - Run quick profiling test"
+	@echo "  make profile-opt   - Run optimized simulation profiling"
 	@echo "  make test          - Run test suite"
 	@echo "  make clean         - Remove all generated files"
 
@@ -44,7 +45,12 @@ profile-part:
 # Run full simulation with profiling
 profile:
 	@echo "Running full simulation with profiling..."
-	python3 src/simulation.py generate --profile
+	python3 src/simulation.py --profile
+
+# Run optimized simulation profiling
+profile-opt:
+	@echo "Running full optimized simulation with profiling..."
+	python3 src/simulation_optimized.py --profile
 
 # Run timing analysis and complexity study
 complexity:

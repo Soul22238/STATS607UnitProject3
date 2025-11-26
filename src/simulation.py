@@ -123,9 +123,9 @@ if __name__ == "__main__":
         sys.argv.remove('--profile')
     
     if enable_profiling:
-        profiler = Profiler()
+        profiler = Profiler(interval=0.1)  # Sample every 100ms to drastically reduce file size for nested loops
         profiler.start()
-        print("🔍 Profiling enabled...")
+        print("Profiling enabled")
     
     if len(sys.argv) > 1 and sys.argv[1] == 'generate':
         # Generate raw data
@@ -141,7 +141,7 @@ if __name__ == "__main__":
     if enable_profiling:
         profiler.stop()
         print("\n" + "="*70)
-        print("🔍 PROFILING RESULTS")
+        print("PROFILING RESULTS")
         print("="*70)
         profiler.print()
         
@@ -151,4 +151,4 @@ if __name__ == "__main__":
         html_file = output_dir / 'full_simulation_profile.html'
         with open(html_file, 'w') as f:
             f.write(profiler.output_html())
-        print(f"\n📊 HTML profile saved to: {html_file}")
+        print(f"\nHTML profile saved to: {html_file}")
